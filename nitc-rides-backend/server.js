@@ -21,9 +21,9 @@ app.use(cors({
 // Middleware to parse incoming JSON data
 app.use(express.json());
 
-// Load and connect to the database
-// The connection initialization inside database.js will execute here
-const db = require('./db/database'); 
+// Load and connect to MongoDB
+const connectDB = require('./config/db');
+connectDB(); 
 
 // Import the routes
 const authRoutes = require('./routes/authRoutes');
