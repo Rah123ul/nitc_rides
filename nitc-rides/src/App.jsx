@@ -27,6 +27,7 @@ export default function App() {
   const [bookType,      setBookType]      = useState("shared");
   const [bookBaseFare,  setBookBaseFare]  = useState(50);
   const [confirmedFare, setConfirmedFare] = useState(null);
+  const [bookingId,     setBookingId]     = useState(null);
 
   // Toast notification
   const [toast, setToast] = useState({ msg: "", show: false });
@@ -74,13 +75,14 @@ export default function App() {
     showToast(`${f.short} → ${t.short}`);
   };
 
-  const handleBook = (ride, type, baseFare, apiConfirmedFare) => {
+  const handleBook = (ride, type, baseFare, apiConfirmedFare, bId) => {
     setBookedRide(ride);
     setBookType(type);
     setBookBaseFare(baseFare || 50);
     setConfirmedFare(apiConfirmedFare || null);
+    setBookingId(bId || null);
     setPage("confirm");
-    showToast(`Booked! 🎉`);
+    showToast(`Waiting for driver approval...`);
   };
 
   const isStudent = user?.role === "student";
@@ -157,6 +159,7 @@ export default function App() {
             to={to}
             baseFare={bookBaseFare}
             confirmedFare={confirmedFare}
+            bookingId={bookingId}
             onBack={() => setPage("home")}
           />
         )}

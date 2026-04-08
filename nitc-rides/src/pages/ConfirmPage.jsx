@@ -1,17 +1,69 @@
+import { useState, useEffect } from "react";
+import { apiFetch } from "../api";
 import { calcFare, fmt, vehicleKey } from "../constants";
 import SeatGrid from "../components/SeatGrid";
 import SeatBar from "../components/SeatBar";
 
-export default function ConfirmPage({ ride, type, from, to, baseFare, confirmedFare, onBack }) {
+export default function ConfirmPage({ ride, type, from, to, baseFare, confirmedFare, bookingId, onBack }) {
+  const [status, setStatus] = useState("pending");
+  const [actualFare, setActualFare] = useState(confirmedFare);
+
+  useEffect(() => {
+    if (!bookingId || status !== "pending") return;
+    const poll = async () => {
+      try {
+        const data = await apiFetch(`/bookings/status/${bookingId}`);
+        if (data.status === "confirmed") {
+          setStatus("confirmed");
+          setActualFare(data.per_person_fare || actualFare);
+        } else if (data.status === "rejected") {
+          setStatus("rejected");
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => clearInterval(id);
+  }, [bookingId, status, actualFare]);
+
   const vKey = vehicleKey(ride?.vehicle_type);
   const maxSeats = ride?.max_seats || (vKey === "minivan" ? 8 : 4);
-  const filled = maxSeats - (ride?.seats_left || 0);
+  const filled = (maxSeats - (ride?.seats_left || 0)) + (type === "shared" ? 1 : 0);
   const n = type === "shared" ? filled : 1;
   const { perPerson, driverTotal } = calcFare(vKey, baseFare, n);
-  const actualFare = confirmedFare || perPerson;
+  const displayFare = actualFare || perPerson;
   const soloFare = calcFare(vKey, baseFare, 1).perPerson;
-  const saved = soloFare - actualFare;
+  const saved = soloFare - displayFare;
   const driverBonus = driverTotal - soloFare;
+
+  if (status === "rejected") {
+    return (
+      <div className="confirm-wrap">
+        <div className="confirm-top">
+          <div className="confirm-emoji">❌</div>
+          <div className="confirm-title">Ride Rejected</div>
+          <div className="confirm-sub">The driver did not accept your request or the vehicle is full.</div>
+        </div>
+        <button className="btn-primary" onClick={onBack}>Find Another Ride</button>
+      </div>
+    );
+  }
+
+  if (status === "pending") {
+    return (
+      <div className="confirm-wrap">
+        <div className="confirm-top">
+          <div className="confirm-emoji">⏳</div>
+          <div className="confirm-title">Waiting for Driver...</div>
+          <div className="confirm-sub">We've sent your request. The driver needs to approve it to confirm your ride.</div>
+        </div>
+        <div className="spinner-wrap" style={{ margin: "40px 0" }}><div className="spinner"></div></div>
+        <button className="btn-ghost" onClick={onBack}>Cancel (Back to Home)</button>
+      </div>
+    );
+  }
 
   return (
     <div className="confirm-wrap">
@@ -45,7 +97,7 @@ export default function ConfirmPage({ ride, type, from, to, baseFare, confirmedF
         <div className="info-row"><span className="ir-lbl">Route</span><span className="ir-val">{from?.short} → {to?.short}</span></div>
         <div className="info-row"><span className="ir-lbl">Ride Type</span><span className="ir-val">{type === "shared" ? "Shared" : "Solo"}</span></div>
         <div className="info-row"><span className="ir-lbl">Base Route Fare</span><span className="ir-val">{fmt(baseFare)}</span></div>
-        <div className="info-row"><span className="ir-lbl">You Pay</span><span className="ir-val big">{fmt(actualFare)}</span></div>
+        <div className="info-row"><span className="ir-lbl">You Pay</span><span className="ir-val big">{fmt(displayFare)}</span></div>
         {saved > 0 && <div className="info-row"><span className="ir-lbl">You Saved</span><span className="ir-val green">{fmt(saved)}</span></div>}
         <div className="info-row"><span className="ir-lbl">Driver Earns</span><span className="ir-val orange">{fmt(driverTotal)}</span></div>
       </div>

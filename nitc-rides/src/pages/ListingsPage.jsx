@@ -53,11 +53,8 @@ export default function ListingsPage({ from, to, onBook, onChangeRoute, showToas
           dropoff_location: to.full,
         }),
       });
-      // Optimistically update seat count
-      setRides(prev => prev.map(r =>
-        r.ride_id === ride.ride_id ? { ...r, seats_left: r.seats_left - 1 } : r
-      ));
-      onBook(ride, "shared", baseFare, data.new_per_person_fare);
+      // Do not optimistically update seats anymore, wait for driver!
+      onBook(ride, "shared", baseFare, null, data.booking_id);
     } catch (e) {
       showToast("❌ " + e.message);
     } finally {

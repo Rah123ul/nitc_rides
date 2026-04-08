@@ -11,6 +11,7 @@ export default function DriverHome({ user, showToast }) {
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [stats, setStats] = useState({ trips_today: 0 });
   const [loading, setLoading] = useState(false);
+  const [pendingBookings, setPendingBookings] = useState([]);
 
   const vKey = vehicleKey(user.vehicle_type || user.vehicle);
   const maxSeats = vKey === "minivan" ? 8 : 4;
@@ -38,12 +39,45 @@ export default function DriverHome({ user, showToast }) {
       if (data.active_ride) {
         setActiveRide(data.active_ride);
         setStatus("active");
+
+        // Also fetch pending bookings
+        try {
+            const pendingData = await apiFetch("/bookings/driver/pending");
+            setPendingBookings(pendingData.bookings || []);
+        } catch {}
       } else {
         setActiveRide(null);
         if (status === "active") setStatus("offline");
+        setPendingBookings([]);
       }
     } catch { /* ignore */ }
-  }, []);
+  }, [status]);
+
+  const confirmBooking = async (id) => {
+    try {
+        const res = await apiFetch("/bookings/driver/confirm", {
+            method: "POST",
+            body: JSON.stringify({ booking_id: id })
+        });
+        showToast(res.message || "Booking confirmed");
+        fetchStats();
+    } catch (err) {
+        showToast("❌ " + err.message);
+    }
+  };
+
+  const rejectBooking = async (id) => {
+    try {
+        const res = await apiFetch("/bookings/driver/reject", {
+            method: "POST",
+            body: JSON.stringify({ booking_id: id })
+        });
+        showToast(res.message || "Booking rejected");
+        fetchStats();
+    } catch (err) {
+        showToast("❌ " + err.message);
+    }
+  };
 
   useEffect(() => {
     fetchRoutes();
@@ -154,6 +188,25 @@ export default function DriverHome({ user, showToast }) {
           </button>
         </div>
       </div>
+
+      {/* Pending requests */}
+      {status === "active" && pendingBookings.length > 0 && (
+          <div className="seat-card">
+              <div className="seat-card-lbl" style={{color: "var(--orange)", marginBottom: 12}}>Pending Requests ({pendingBookings.length})</div>
+              {pendingBookings.map(b => (
+                  <div key={b._id} style={{ padding: 12, background: "var(--card-bg-alt)", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 10 }}>
+                      <div style={{fontWeight: 'bold'}}>{b.user_id?.name || "Student"}</div>
+                      <div style={{fontSize: 13, color: "var(--muted)", margin: "4px 0"}}>
+                          {b.pickup_location} → {b.dropoff_location}
+                      </div>
+                      <div style={{display: 'flex', gap: 10, marginTop: 10}}>
+                          <button style={{flex: 1, padding: 8, background: "var(--green)", color: "white", border: "none", borderRadius: 6, fontWeight: "bold", cursor: "pointer"}} onClick={() => confirmBooking(b._id)}>✓ Accept</button>
+                          <button style={{flex: 1, padding: 8, background: "transparent", color: "var(--red)", border: "1px solid var(--red)", borderRadius: 6, cursor: "pointer"}} onClick={() => rejectBooking(b._id)}>✕ Decline</button>
+                      </div>
+                  </div>
+              ))}
+          </div>
+      )}
 
       {/* Stats */}
       <div className="drv-stats">
