@@ -16,32 +16,31 @@ const bookRide = async (req, res) => {
     try {
         const ride = await Ride.findById(ride_id).populate('route_id');
         
-        if (!ride || !ride.route_id) {
-            return res.status(404).json({ error: 'Ride not found.' });
-        }
-
-        if (ride.status !== 'active') {
-            return res.status(400).json({ error: 'Sorry, this ride is no longer active.' });
-        }
-
-        if (ride.current_passengers >= ride.max_seats) {
-            return res.status(400).json({ error: 'Sorry, this vehicle is completely full!' });
+        let base_fare = 0;
+        if (!ride.route_id) {
+            const Route = require('../models/Route');
+            const routeDoc = await Route.findOne({
+                start_location: new RegExp(`^${pickup_location.trim()}$`, 'i'),
+                end_location: new RegExp(`^${dropoff_location.trim()}$`, 'i')
+            });
+            if (!routeDoc) return res.status(400).json({ error: 'Route not found in database.' });
+            base_fare = routeDoc.base_fare;
+        } else {
+            // let's strictly validate if driver's fixed route is same as requested pickup/dropoff
+            if (
+                ride.route_id.start_location.trim().toLowerCase() !== pickup_location.trim().toLowerCase() ||
+                ride.route_id.end_location.trim().toLowerCase() !== dropoff_location.trim().toLowerCase()
+            ) {
+                return res.status(400).json({ 
+                    error: `Route mismatch! The driver is designated for ${ride.route_id.start_location} to ${ride.route_id.end_location}.` 
+                });
+            }
+            base_fare = ride.route_id.base_fare;
         }
 
         const newPassengersCount = ride.current_passengers + 1;
-        const driverTotal = ride.route_id.base_fare + ((newPassengersCount - 1) * 10);
+        const driverTotal = base_fare + ((newPassengersCount - 1) * 10);
         const perPersonFare = Number((driverTotal / newPassengersCount).toFixed(2));
-
-        // Do NOT increment current passengers yet. Wait for driver confirmation.
-        // But first, let's strictly validate if driver's fixed route is same as requested pickup/dropoff
-        if (
-            ride.route_id.start_location.trim().toLowerCase() !== pickup_location.trim().toLowerCase() ||
-            ride.route_id.end_location.trim().toLowerCase() !== dropoff_location.trim().toLowerCase()
-        ) {
-            return res.status(400).json({ 
-                error: `Route mismatch! The driver is designated for ${ride.route_id.start_location} to ${ride.route_id.end_location}.` 
-            });
-        }
 
         const newBooking = await Booking.create({
             user_id: student_id,
@@ -125,8 +124,24 @@ const confirmBooking = async (req, res) => {
             return res.status(400).json({ error: 'Ride is already full. Booking has been auto-rejected.' });
         }
 
+        let base_fare = 0;
+        if (!ride.route_id) {
+            const Route = require('../models/Route');
+            const routeDoc = await Route.findOne({
+                start_location: new RegExp(`^${booking.pickup_location.trim()}$`, 'i'),
+                end_location: new RegExp(`^${booking.dropoff_location.trim()}$`, 'i')
+            });
+            if (!routeDoc) return res.status(400).json({ error: 'Route lookup failed.' });
+            
+            ride.route_id = routeDoc._id;
+            await ride.save(); // lock the route!
+            base_fare = routeDoc.base_fare;
+        } else {
+            base_fare = ride.route_id.base_fare;
+        }
+
         const newPassengersCount = ride.current_passengers + 1;
-        const driverTotal = ride.route_id.base_fare + ((newPassengersCount - 1) * 10);
+        const driverTotal = base_fare + ((newPassengersCount - 1) * 10);
         const perPersonFare = Number((driverTotal / newPassengersCount).toFixed(2));
 
         // Use Atomic update to prevent race conditions on seats

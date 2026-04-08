@@ -7,12 +7,7 @@ const startRide = async (req, res) => {
         return res.status(403).json({ error: 'Access denied. Only drivers can start a ride.' });
     }
 
-    const { route_id } = req.body;
     const driver_id = req.user.id;
-
-    if (!route_id) {
-        return res.status(400).json({ error: 'Please provide a route_id to start the ride.' });
-    }
 
     try {
         const driver = await Driver.findById(driver_id);
@@ -22,17 +17,9 @@ const startRide = async (req, res) => {
 
         const max_seats = driver.vehicle_type === 'Auto Rickshaw' ? 4 : 8;
 
-        // Note: route_id from frontend might be testing integer ID. We need the objectId, or we store the integer ID in the Route Model and find by integers.
-        // Wait, route_id coming from frontend is `r.id` which is the integer ID because they were fetching it from `getAllRoutes`.
-        // Let's find the MongoDB Route document by the integer `id` field.
-        const route = await Route.findOne({ id: route_id });
-        if (!route) {
-            return res.status(404).json({ error: 'Route not found.' });
-        }
-
         const newRide = await Ride.create({
             driver_id: driver._id,
-            route_id: route._id,
+            route_id: null,
             max_seats,
             current_passengers: 0,
             status: 'active'
@@ -41,11 +28,11 @@ const startRide = async (req, res) => {
         await Driver.findByIdAndUpdate(driver_id, { status: 'active' });
 
         res.status(201).json({
-            message: 'Ride started successfully!',
+            message: 'Ride started successfully! Ready for requests.',
             ride: {
-                id: newRide._id, // Return the string _id mapped to id for frontend compatibility
+                id: newRide._id,
                 driver_id: driver_id,
-                route_id: route_id, // keep it the integer id for frontend consistency
+                route_id: null,
                 max_seats: max_seats,
                 current_passengers: 0,
                 status: 'active'
@@ -67,8 +54,10 @@ const getActiveRides = async (req, res) => {
             ride_id: ride._id,
             driver_name: ride.driver_id.name,
             vehicle_type: ride.driver_id.vehicle_type,
-            route: `${ride.route_id.start_location} to ${ride.route_id.end_location}`,
-            base_fare: ride.route_id.base_fare,
+            route: ride.route_id ? `${ride.route_id.start_location} to ${ride.route_id.end_location}` : 'Ready for your route',
+            route_start: ride.route_id ? ride.route_id.start_location : null,
+            route_end: ride.route_id ? ride.route_id.end_location : null,
+            base_fare: ride.route_id ? ride.route_id.base_fare : 0, // Ignored by UI if route=any
             seats_left: ride.max_seats - ride.current_passengers
         }));
 
@@ -136,16 +125,16 @@ const getMyStats = async (req, res) => {
             .populate('route_id');
 
         let formattedActiveRide = null;
-        if (activeRide && activeRide.route_id) {
+        if (activeRide) {
             formattedActiveRide = {
                 id: activeRide._id,
-                route_id: activeRide.route_id.id,
+                route_id: activeRide.route_id ? activeRide.route_id.id : null,
                 max_seats: activeRide.max_seats,
                 current_passengers: activeRide.current_passengers,
                 status: activeRide.status,
-                start_location: activeRide.route_id.start_location,
-                end_location: activeRide.route_id.end_location,
-                base_fare: activeRide.route_id.base_fare
+                start_location: activeRide.route_id ? activeRide.route_id.start_location : 'Any Location',
+                end_location: activeRide.route_id ? activeRide.route_id.end_location : 'Any Location',
+                base_fare: activeRide.route_id ? activeRide.route_id.base_fare : 0
             };
         }
 
