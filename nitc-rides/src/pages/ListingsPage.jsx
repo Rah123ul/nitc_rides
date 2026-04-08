@@ -31,10 +31,17 @@ export default function ListingsPage({ from, to, onBook, onChangeRoute, showToas
     return () => clearInterval(id);
   }, [fetchRides]);
 
-  // Filter by vehicle type
+  // Filter by vehicle type and route lock
   const visible = rides.filter(r => {
     if (filter === "auto" && !r.vehicle_type?.toLowerCase().includes("auto")) return false;
     if (filter === "minivan" && !r.vehicle_type?.toLowerCase().includes("minivan")) return false;
+    
+    // If the driver is already locked to a DIFFERENT route, hide them!
+    if (r.route_start && r.route_end) {
+        if (r.route_start.trim().toLowerCase() !== from.full.trim().toLowerCase() || r.route_end.trim().toLowerCase() !== to.full.trim().toLowerCase()) {
+            return false;
+        }
+    }
     return true;
   });
 

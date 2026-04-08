@@ -8,7 +8,6 @@ export default function DriverHome({ user, showToast }) {
   const [status, setStatus] = useState(user.status || "offline");   // "offline" | "active"
   const [activeRide, setActiveRide] = useState(null);               // current ride object
   const [routes, setRoutes] = useState([]);                          // all available routes
-  const [selectedRouteId, setSelectedRouteId] = useState("");
   const [stats, setStats] = useState({ trips_today: 0 });
   const [loading, setLoading] = useState(false);
   const [pendingBookings, setPendingBookings] = useState([]);
@@ -87,12 +86,10 @@ export default function DriverHome({ user, showToast }) {
   }, [fetchRoutes, fetchStats]);
 
   const goOnline = async () => {
-    if (!selectedRouteId) { showToast("Please select a route first"); return; }
     setLoading(true);
     try {
       const data = await apiFetch("/rides/start", {
         method: "POST",
-        body: JSON.stringify({ route_id: parseInt(selectedRouteId) }),
       });
       setActiveRide(data.ride);
       setStatus("active");
@@ -123,7 +120,7 @@ export default function DriverHome({ user, showToast }) {
     }
   };
 
-  const selectedRoute = routes.find(r => String(r.id) === selectedRouteId);
+
 
   return (
     <div className="drv-home">
@@ -136,27 +133,7 @@ export default function DriverHome({ user, showToast }) {
         </div>
       </div>
 
-      {/* Route selector — only shown when offline */}
-      {status === "offline" && (
-        <div className="route-select-card">
-          <div className="rsc-label">📍 Select Your Route</div>
-          {routes.length === 0 ? (
-            <div style={{ fontSize: 13, color: "var(--muted)" }}>Loading routes…</div>
-          ) : (
-            <select
-              className="f-input"
-              value={selectedRouteId}
-              onChange={e => setSelectedRouteId(e.target.value)}
-            >
-              {routes.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.start_location} → {r.end_location} (₹{r.base_fare})
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      )}
+
 
       {/* Online/Offline toggle */}
       <div className="online-card">
@@ -166,9 +143,11 @@ export default function DriverHome({ user, showToast }) {
             {status === "active" ? "● Online" : "○ Offline"}
           </span>
         </div>
-        {status === "active" && activeRide && selectedRoute && (
+        {status === "active" && activeRide && (
           <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
-            Current route: <strong style={{ color: "var(--text)" }}>{activeRide.route_id}</strong>
+            Current route: <strong style={{ color: "var(--text)" }}>
+              {activeRide.start_location !== 'Any Location' ? `${activeRide.start_location} → ${activeRide.end_location}` : 'Ready for first request...'}
+            </strong>
           </div>
         )}
         <div className="tog-row">
